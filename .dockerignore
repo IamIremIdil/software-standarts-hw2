@@ -8,6 +8,5 @@ __pycache__/
 *.md
 Dockerfile
 .dockerignore
-test_app.py
 screenshots-extra/
 *.png

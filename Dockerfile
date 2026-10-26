@@ -7,17 +7,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /data \
-    && chown appuser:appuser /data
+RUN useradd --create-home --uid 10001 appuser
 USER appuser
 
-ENV DATA_DIR=/data \
-    APP_VERSION=1.0.0 \
-    PYTHONUNBUFFERED=1
+ENV APP_VERSION=1.0.0 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8000
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')"
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app"]
+CMD ["sh", "-c", "gunicorn -b 0.0.0.0:${PORT} app:app"]

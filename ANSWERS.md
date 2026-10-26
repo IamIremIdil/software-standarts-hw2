@@ -1,21 +1,19 @@
-### 1. Order of the instructions
+### 1. How the app finds redis by name
 
-My Dockerfile starts with a pinned base image and sets the working directory. It then copies `requirements.txt` and installs the dependencies before copying the rest of the code. Finally, it creates a non-root user, sets the environment variables, and defines the port and start command.
+Compose creates one network for the project (`software-standarts-hw2_default`) and attaches both containers to it. Docker runs an embedded DNS server on that network that maps each service name to the container's current IP, so my app, configured with `REDIS_HOST=redis`, reaches Redis. I confirmed it with `gethostbyname('redis')` inside the app container, which printed `172.19.0.2`. The default bridge network used by plain `docker run` has no such DNS, so containers can only reach each other by IP, and those change on every start. My test `docker run --rm alpine ping -c1 a1` failed with `bad address 'a1'` (see the extra screenshot 6).
 
-Docker builds images in layers and reuses cached layers as long as nothing in that layer or the previous layers has changed. Since dependencies don't change as often as the code, installing them first means Docker can reuse the cached `pip install` layer when I only edit the code. When I changed `app.py` and rebuilt the image, the build time dropped from 14.4 seconds to 1.6 seconds, and `pip install` showed `CACHED`. If I copied the entire project before installing the dependencies, even a small code change would force Docker to reinstall all the packages.
+### 2. Stateless vs. stateful services
 
-### 2. Data inside containers
+The `app` is stateless: it keeps no data on its own disk, and every request reads and writes the counter in Redis. The `redis` service is stateful: it keeps the counter in the `redis-data` named volume. I called `/visit` three times (1, 2, 3), ran `docker compose rm -sf app` and `docker compose down`, started again with `docker compose up -d`, and the next `/visit` returned 4. After `docker compose down -v`, which also deletes the volume, it returned 1, so the data lives in the volume and not in any container.
 
-Data written inside a container is stored in its writable layer, which gets deleted when the container is removed. I tested this with my visit counter: after removing the container and starting a new one, the counter started at 1 again.
+### 3. Where database passwords should come from
 
-To keep the data between containers, I mounted a volume using `-v hw1-data:/data`. After removing and recreating the container, the counter continued from 2 to 3 instead of starting over. This showed me why important data shouldn't be stored only inside a container. Containers are meant to be disposable, so data that needs to persist should be stored separately, such as in a database or external storage. A Docker volume is a simple way to achieve this.
+A password should come from the environment at runtime, for example a `.env` file ignored by Git and referenced as `${DB_PASSWORD}` (with a fake `.env.example` committed), or a secrets manager in a real deployment. Committing it is a problem even in a private repository because Git history is permanent: deleting the file later does not remove it from old commits or existing clones, and once it leaks the only fix is to rotate the password. My setup has no password (Redis runs without authentication and its port is not published to the host), so I have no `.env` or `.env.example`, which the assignment only requires if secrets are used.
 
-### 3. The `latest` tag
+### Bonus: three copies of the app
 
-The latest tag is a label commonly used for the most recently published image, but it doesn't guarantee that the image is actually the newest version. If the base image uses `latest`, building the same Dockerfile today and six months from now could produce different results if the base image or dependencies have changed, potentially causing unexpected bugs.
-
-To avoid this, I pinned my base image to `python:3.12.11-slim-bookworm`, which specifies the Python version and Debian release. I also pinned the dependencies in `requirements.txt` using `flask==3.1.3` and `gunicorn==23.0.0`. This makes the build more predictable and helps ensure that the project behaves consistently across different environments.
+I temporarily removed the fixed `8000:8000` mapping so the copies would not fight for the same host port, and ran `docker compose up -d --scale app=3`. Afterwards I restored the mapping, so my final `compose.yaml` publishes port 8000. Requests sent to the three copies (ports 64937, 64938, 64939) returned 1, 2, 3, 4, 5, so the counter was shared. All copies use the same Redis by name, which is why state belongs outside the app.
 
 ### AI assistant note
 
-I used an AI assistant to help me plan the homework step by step and understand Dockerfile instructions and error messages. I wrote the final answers in my own words and tested the commands and results myself.
+I used an AI assistant to review my files against the checklist and to understand Docker's DNS, the healthcheck setup, and why the counter survived `docker compose down` but not `down -v`. I ran every command myself, and the outputs quoted above are from my own terminal.
