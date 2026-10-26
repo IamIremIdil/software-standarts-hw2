@@ -1,6 +1,9 @@
 # HW-2: Flask app + Redis with Docker Compose
 
-**Start:** `docker compose up -d --build`
-**Test:** `curl localhost:8000/visit` (the counter goes up each time)
-**Check:** `docker compose ps` (redis should be "healthy")
-**Stop:** `docker compose down` (use `docker compose down -v` to delete data)
+```
+docker compose up -d --build   # start app + redis
+curl localhost:8000/visit      # counter goes up on each call
+docker compose ps              # redis should show "healthy"
+docker compose down            # stop, data kept
+docker compose down -v         # stop and delete data
+```
